@@ -144,73 +144,70 @@ contract Qey is ERC1155, Ownable, TokenURI {
         uint256 rand = uint256(keccak256(abi.encodePacked(_hash))) %
             remainSupply;
         uint256 idType;
-        if (rand < ((1261 - hashesParcel1) * 7) / 10) idType = 1;
-        else if (rand < (1261 - hashesParcel1)) idType = 2;
-        else if (
-            rand < (1261 - hashesParcel1) + ((1261 - hashesParcel2) * 7) / 10
-        ) idType = 3;
-        else if (rand < (1261 - hashesParcel1) + (1261 - hashesParcel2))
-            idType = 4;
-        else if (
-            rand <
-            (1261 - hashesParcel1) +
-                (1261 - hashesParcel2) +
-                ((1261 - hashesParcel3) * 6) /
-                10
-        ) idType = 5;
-        else if (
-            rand <
-            (1261 - hashesParcel1) +
-                (1261 - hashesParcel2) +
-                ((1261 - hashesParcel3) * 8) /
-                10
-        ) idType = 6;
-        else if (
-            rand <
-            (1261 - hashesParcel1) +
-                (1261 - hashesParcel2) +
-                ((1261 - hashesParcel3) * 9) /
-                10
-        ) idType = 7;
-        else if (rand < rand - ((156 - hashesParcel4) * 3) / 10) idType = 8;
-        else idType = 9;
+        uint256 remainP1 = 1261 - hashesParcel1;
+        uint256 remainP2 = 1261 - hashesParcel2;
+        uint256 remainP3 = 1261 - hashesParcel3;
+        uint256 remainP4 = 156 - hashesParcel4;
+        if (rand < (remainP1 * 7) / 10)
+            idType = 1; // parcel1 with one number    70%
+        else if (rand < remainP1)
+            idType = 2; // parcel1 with two numbers   30%
+        else if (rand < remainP1 + (remainP2 * 7) / 10)
+            idType = 3; // parcel2 with one number    70%
+        else if (rand < remainP1 + remainP2)
+            idType = 4; // parcel2 with two numbers   30%
+        else if (rand < remainP1 + remainP2 + (remainP3 * 6) / 10)
+            idType = 5; // parcel3 with one number    60%
+        else if (rand < remainP1 + remainP2 + (remainP3 * 8) / 10)
+            idType = 6; // parcel3 with two numbers   20%
+        else if (rand < remainP1 + remainP2 + (remainP3 * 9) / 10)
+            idType = 7; // parcel3 with three numbers 10%
+        else if (rand < remainSupply - remainP4)
+            idType = 8; // parcel3 with four numbers  10%
+        else if (rand < remainSupply - (remainP4 * 3) / 10)
+            idType = 9; // parcel4 with one number    70%
+        else idType = 10; // parcel4 with two number    30%
 
         uint256 _id;
         if (idType < 3) {
-            hashesParcel1++;
             _id = hashesParcel1;
+            hashesParcel1++;
         } else if (idType < 5) {
-            hashesParcel2++;
             _id = hashesParcel2 + 1261;
-        } else if (idType < 7) {
-            hashesParcel3++;
+            hashesParcel2++;
+        } else if (idType < 9) {
             _id = hashesParcel3 + 1261 * 2;
+            hashesParcel3++;
         } else {
-            hashesParcel4++;
             _id = hashesParcel4 + 1261 * 3;
+            hashesParcel4++;
         }
 
-        _id--;
+        _mint(msg.sender, _id, 1, "");
         hashes[_id] = _hash;
         tokenTypes[_id] = idType;
-        _mint(msg.sender, _id, 1, "");
         _setTokenURI(_id, _uri);
         _hashExists[_hash] = true;
     }
 
+    function burn(string memory _uri, uint256 token1) public {
+        burn(_uri, token1, 10000, 10000);
+    }
+
     function burn(
+        string memory _uri,
         uint256 token1,
         uint256 token2,
         uint256 token3
     ) public {
+        require(bytes(_uri).length > 0, "uri should be set");
         require(
             balanceOf(msg.sender, token1) >= 1,
             "Should be owner of first token"
         );
-        _burn(msg.sender, token1, 1);
         string memory _hash;
         uint256 idType;
-        if (tokenTypes[token1] != 9) {
+        if (tokenTypes[token1] == 1 || tokenTypes[token1] == 2) {
             require(
                 balanceOf(msg.sender, token2) >= 1,
                 "Should be owner of second token"
@@ -218,6 +215,13 @@ contract Qey is ERC1155, Ownable, TokenURI {
             require(
                 balanceOf(msg.sender, token3) >= 1,
                 "Should be owner of third token"
+            );
+            require(
+                tokenTypes[token2] == 3 ||
+                    tokenTypes[token2] == 4 ||
+                    tokenTypes[token3] > 4 ||
+                    tokenTypes[token3] < 4,
+                "Token 2 should be parcel2, token 3 should be parcel3"
             );
             _burn(msg.sender, token2, 1);
             _burn(msg.sender, token3, 1);
@@ -228,18 +232,38 @@ contract Qey is ERC1155, Ownable, TokenURI {
                 tokenTypes[token1] +
                 tokenTypes[token2] +
                 tokenTypes[token3] +
-                1;
-        } else {
+                2;
+        } else if (tokenTypes[token1] == 9 || tokenTypes[token1] == 10) {
             _hash = hashes[token1];
-            idType = 15;
-        }
+            idType = 16;
+        } else require(false, "parcel 1,2,3 or parcel 4 can be burnt");
+        _burn(msg.sender, token1, 1);
 
-        hashesGenesis++;
+        // complete burn for blockchain
+        hashes[token1] = "";
+        tokenTypes[token1] = 20;
+        _setTokenURI(token1, "");
+        _hashExists[_hash] = false;
+
+        hashes[token2] = "";
+        tokenTypes[token2] = 20;
+        _setTokenURI(token2, "");
+        _hashExists[_hash] = false;
+
+        hashes[token3] = "";
+        tokenTypes[token3] = 20;
+        _setTokenURI(token3, "");
+        _hashExists[_hash] = false;
+        // end of burnt
+
         uint256 _id = 3939 + hashesGenesis;
-        _id--;
-        hashes[_id] = _hash;
-        tokenTypes[idType] = idType;
+        hashesGenesis++;
+
         _mint(msg.sender, _id, 1, "");
+        hashes[_id] = _hash;
+        tokenTypes[_id] = idType;
+        _setTokenURI(_id, _uri);
+        _hashExists[_hash] = true;
     }
 
     function getQeyCount() public view returns (uint256 count) {
